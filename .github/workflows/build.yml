@@ -6,6 +6,9 @@ on:
     tags: [ "v*" ]
   workflow_dispatch:
 
+permissions:
+  contents: write # Needed to create releases
+
 jobs:
   build:
     name: Build macOS App
@@ -15,31 +18,30 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # STAP 1: Download, Unzip, Zoek & Installeer (Alles-in-1 voor zekerheid)
-      - name: Install Platypus (Debug Mode)
+      # STAP 1: Download Platypus (Best Practice)
+      - name: Install Platypus
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "⬇️ Downloading Platypus..."
-          curl -L -O https://sveinbjorn.org/files/software/platypus/Platypus-5.4.1.zip
+          echo "⬇️ Downloading Platypus via GitHub CLI..."
           
-          echo "📦 Unzipping..."
-          # Geen -q, we willen zien wat er gebeurt
-          unzip Platypus-5.4.1.zip
+          # Download specific version from the external repository
+          gh release download 5.4.1 -R sveinbjornt/Platypus -p "Platypus-*.zip" --skip-existing
           
-          echo "🔎 DEBUG: Listing contents of current directory:"
-          ls -la
+          # Find the file we just downloaded (in case version number changes in filename)
+          ZIP_NAME=$(find . -name "Platypus-*.zip" | head -n 1)
+          echo "📦 Unzipping $ZIP_NAME..."
           
-          echo "🔎 DEBUG: Searching for ScriptExec..."
-          # Dit commando zoekt het bestand, waar het ook staat in de huidige map
+          unzip -q "$ZIP_NAME"
+          
+          echo "🔎 DEBUG: Locating files..."
+          # Find files dynamically (subfolders don't matter now)
           SCRIPT_EXEC_PATH=$(find . -name "ScriptExec" -type f | head -n 1)
           NIB_PATH=$(find . -name "MainMenu.nib" | head -n 1)
           CLT_PATH=$(find . -name "platypus_clt" -type f | head -n 1)
           
-          echo "   -> Found ScriptExec at: '$SCRIPT_EXEC_PATH'"
-          echo "   -> Found MainMenu.nib at: '$NIB_PATH'"
-          echo "   -> Found CLT at: '$CLT_PATH'"
-          
           if [[ -z "$SCRIPT_EXEC_PATH" ]]; then
-             echo "❌ ERROR: ScriptExec not found! Listing complete structure for debugging:"
+             echo "❌ ERROR: Could not find ScriptExec inside the zip!"
              ls -R
              exit 1
           fi
@@ -48,7 +50,6 @@ jobs:
           sudo mkdir -p /usr/local/share/platypus
           sudo mkdir -p /usr/local/bin
           
-          # Gebruik de gevonden paden (met quotes voor veiligheid)
           sudo cp "$SCRIPT_EXEC_PATH" /usr/local/share/platypus/ScriptExec
           sudo cp -r "$NIB_PATH" /usr/local/share/platypus/MainMenu.nib
           sudo cp "$CLT_PATH" /usr/local/bin/platypus
@@ -58,7 +59,7 @@ jobs:
           
           echo "✅ Platypus installed successfully."
 
-      # STAP 2: Icoon
+      # STAP 2: Generate Icon
       - name: Generate Apple Icon (.icns)
         run: |
           mkdir MyIcon.iconset
@@ -66,11 +67,11 @@ jobs:
           sips -z 1024 1024 app.ico --out MyIcon.iconset/icon_512x512@2x.png
           iconutil -c icns MyIcon.iconset
 
-      # STAP 3: Script voorbereiden
+      # STAP 3: Prepare Script
       - name: Prepare Script
         run: chmod +x assignment-collector.sh
 
-      # STAP 4: Bouwen
+      # STAP 4: Build
       - name: Build Application
         run: |
           platypus --version
