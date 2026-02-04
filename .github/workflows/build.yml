@@ -6,8 +6,9 @@ on:
     tags: [ "v*" ]
   workflow_dispatch:
 
+# Grant permission to create releases
 permissions:
-  contents: write # Needed to create releases
+  contents: write
 
 jobs:
   build:
@@ -18,63 +19,30 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # STAP 1: Download Platypus (Best Practice)
+      # STAP 1: Install Platypus (The Official Way)
       - name: Install Platypus
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "⬇️ Downloading Platypus via GitHub CLI..."
-          
-          # Download specific version from the external repository
-          gh release download 5.4.1 -R sveinbjornt/Platypus -p "Platypus-*.zip" --skip-existing
-          
-          # Find the file we just downloaded (in case version number changes in filename)
-          ZIP_NAME=$(find . -name "Platypus-*.zip" | head -n 1)
-          echo "📦 Unzipping $ZIP_NAME..."
-          
-          unzip -q "$ZIP_NAME"
-          
-          echo "🔎 DEBUG: Locating files..."
-          # Find files dynamically (subfolders don't matter now)
-          SCRIPT_EXEC_PATH=$(find . -name "ScriptExec" -type f | head -n 1)
-          NIB_PATH=$(find . -name "MainMenu.nib" | head -n 1)
-          CLT_PATH=$(find . -name "platypus_clt" -type f | head -n 1)
-          
-          if [[ -z "$SCRIPT_EXEC_PATH" ]]; then
-             echo "❌ ERROR: Could not find ScriptExec inside the zip!"
-             ls -R
-             exit 1
-          fi
+        uses: sveinbjornt/action-platypus@v1
+        with:
+          version: 'latest'
 
-          echo "⚙️ Setting up paths..."
-          sudo mkdir -p /usr/local/share/platypus
-          sudo mkdir -p /usr/local/bin
-          
-          sudo cp "$SCRIPT_EXEC_PATH" /usr/local/share/platypus/ScriptExec
-          sudo cp -r "$NIB_PATH" /usr/local/share/platypus/MainMenu.nib
-          sudo cp "$CLT_PATH" /usr/local/bin/platypus
-          
-          sudo chmod +x /usr/local/bin/platypus
-          sudo chmod +x /usr/local/share/platypus/ScriptExec
-          
-          echo "✅ Platypus installed successfully."
-
-      # STAP 2: Generate Icon
-      - name: Generate Apple Icon (.icns)
+      # STAP 2: Generate Apple Icon (.icns)
+      # We still need this because Platypus expects a .icns file for builds
+      - name: Generate Icon
         run: |
           mkdir MyIcon.iconset
           sips -z 512 512 app.ico --out MyIcon.iconset/icon_512x512.png
           sips -z 1024 1024 app.ico --out MyIcon.iconset/icon_512x512@2x.png
           iconutil -c icns MyIcon.iconset
 
-      # STAP 3: Prepare Script
-      - name: Prepare Script
-        run: chmod +x assignment-collector.sh
-
-      # STAP 4: Build
-      - name: Build Application
+      # STAP 3: Build Application
+      # We use the flags we defined earlier:
+      # -D : Droppable (Crucial for drag & drop support)
+      # -o 'None' : No text window (Since we use native GUI dialogs)
+      # -i : Icon path
+      # -I : Bundle ID
+      - name: Build App
         run: |
-          platypus --version
+          chmod +x assignment-collector.sh
           
           platypus \
             -D \
@@ -86,9 +54,11 @@ jobs:
             'assignment-collector.sh' \
             'GLR Collector.app'
 
+      # STAP 4: Zip Application (Preserves permissions)
       - name: Zip Application
         run: zip -r GLR_Collector.zip "GLR Collector.app"
 
+      # STAP 5: Upload Artifact (For testing)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -96,6 +66,7 @@ jobs:
           path: GLR_Collector.zip
           retention-days: 5
 
+      # STAP 6: Create Release (Only on tag push)
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
