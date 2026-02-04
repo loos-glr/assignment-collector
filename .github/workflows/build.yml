@@ -1,0 +1,61 @@
+name: Build GLR Collector
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ] # Trigger ook bij tags zoals v1.0
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build macOS App
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Stap 1: Installeer Platypus
+      - name: Install Platypus
+        run: brew install platypus
+
+      # Stap 2: Converteer .ico naar .png (macOS snapt .ico niet goed)
+      # We gebruiken 'sips' (standaard macOS tool) om er een bruikbaar plaatje van te maken
+      - name: Convert Icon
+        run: sips -s format png app.ico --out appIcon.png
+
+      # Stap 3: Maak script uitvoerbaar
+      - name: Prepare Script
+        run: chmod +x assignment-collector.sh
+
+      # Stap 4: Bouw de App met Platypus
+      - name: Build Application
+        run: |
+          platypus \
+            -D \
+            -o 'None' \
+            -i 'appIcon.png' \
+            -y \
+            -a 'GLR Collector' \
+            -I 'nl.glr.assignmentcollector' \
+            'assignment-collector.sh' \
+            'GLR Collector.app'
+
+      # Stap 5: Zippen (Nodig om permissies te behouden)
+      - name: Zip Application
+        run: zip -r GLR_Collector.zip "GLR Collector.app"
+
+      # Stap 6: Upload als Artifact (Voor testen)
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GLR-Collector-Build
+          path: GLR_Collector.zip
+          retention-days: 5
+
+      # Stap 7: Maak automatisch een Release aan (Alleen bij tags)
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: GLR_Collector.zip
