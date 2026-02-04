@@ -15,41 +15,50 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # STAP 1: Download Platypus handmatig (Betrouwbaarder dan Brew)
-      - name: Download Platypus
+      # STAP 1: Download, Unzip, Zoek & Installeer (Alles-in-1 voor zekerheid)
+      - name: Install Platypus (Debug Mode)
         run: |
-          echo "Downloading Platypus..."
-          curl -L -O https://github.com/sveinbjornt/Platypus/releases/download/v5.5.0/platypus5.5.0.zip
+          echo "⬇️ Downloading Platypus..."
+          curl -L -O https://sveinbjorn.org/files/software/platypus/Platypus-5.4.1.zip
           
-          echo "Unzipping..."
-          unzip -q platypus5.5.0.zip
+          echo "📦 Unzipping..."
+          # Geen -q, we willen zien wat er gebeurt
+          unzip Platypus-5.4.1.zip
           
-          # DEBUG: Laat zien wat we hebben uitgepakt
-          echo "--- DEBUG: Listing extracted files ---"
-          ls -R Platypus.app/Contents/Resources/ || echo "Folder not found!"
+          echo "🔎 DEBUG: Listing contents of current directory:"
+          ls -la
+          
+          echo "🔎 DEBUG: Searching for ScriptExec..."
+          # Dit commando zoekt het bestand, waar het ook staat in de huidige map
+          SCRIPT_EXEC_PATH=$(find . -name "ScriptExec" -type f | head -n 1)
+          NIB_PATH=$(find . -name "MainMenu.nib" | head -n 1)
+          CLT_PATH=$(find . -name "platypus_clt" -type f | head -n 1)
+          
+          echo "   -> Found ScriptExec at: '$SCRIPT_EXEC_PATH'"
+          echo "   -> Found MainMenu.nib at: '$NIB_PATH'"
+          echo "   -> Found CLT at: '$CLT_PATH'"
+          
+          if [[ -z "$SCRIPT_EXEC_PATH" ]]; then
+             echo "❌ ERROR: ScriptExec not found! Listing complete structure for debugging:"
+             ls -R
+             exit 1
+          fi
 
-      # STAP 2: Installeer de command line tools handmatig
-      # We verplaatsen de bestanden precies naar waar de tool ze verwacht
-      - name: Setup Platypus Environment
-        run: |
-          # Maak de systeemmap aan
+          echo "⚙️ Setting up paths..."
           sudo mkdir -p /usr/local/share/platypus
           sudo mkdir -p /usr/local/bin
           
-          # Kopieer ScriptExec (De 'motor' van de app)
-          sudo cp "Platypus.app/Contents/Resources/ScriptExec" /usr/local/share/platypus/ScriptExec
+          # Gebruik de gevonden paden (met quotes voor veiligheid)
+          sudo cp "$SCRIPT_EXEC_PATH" /usr/local/share/platypus/ScriptExec
+          sudo cp -r "$NIB_PATH" /usr/local/share/platypus/MainMenu.nib
+          sudo cp "$CLT_PATH" /usr/local/bin/platypus
           
-          # Kopieer MainMenu.nib (De interface)
-          sudo cp -r "Platypus.app/Contents/Resources/MainMenu.nib" /usr/local/share/platypus/MainMenu.nib
-          
-          # Link de executable naar /usr/local/bin zodat we 'platypus' kunnen typen
-          sudo ln -sf "$(pwd)/Platypus.app/Contents/Resources/platypus_clt" /usr/local/bin/platypus
-          
-          # Maak het uitvoerbaar (voor de zekerheid)
           sudo chmod +x /usr/local/bin/platypus
           sudo chmod +x /usr/local/share/platypus/ScriptExec
+          
+          echo "✅ Platypus installed successfully."
 
-      # STAP 3: Icoon fixen
+      # STAP 2: Icoon
       - name: Generate Apple Icon (.icns)
         run: |
           mkdir MyIcon.iconset
@@ -57,14 +66,14 @@ jobs:
           sips -z 1024 1024 app.ico --out MyIcon.iconset/icon_512x512@2x.png
           iconutil -c icns MyIcon.iconset
 
+      # STAP 3: Script voorbereiden
       - name: Prepare Script
         run: chmod +x assignment-collector.sh
 
       # STAP 4: Bouwen
       - name: Build Application
         run: |
-          # DEBUG: Check of commando werkt
-          platypus --version || echo "Version check failed"
+          platypus --version
           
           platypus \
             -D \
