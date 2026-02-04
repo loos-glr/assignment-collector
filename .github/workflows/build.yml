@@ -19,10 +19,10 @@ jobs:
       - name: Download Platypus
         run: |
           echo "Downloading Platypus..."
-          curl -L -O https://sveinbjorn.org/files/software/platypus/Platypus-5.4.1.zip
+          curl -L -O https://github.com/sveinbjornt/Platypus/releases/download/v5.5.0/platypus5.5.0.zip
           
           echo "Unzipping..."
-          unzip -q Platypus-5.4.1.zip
+          unzip -q platypus5.5.0.zip
           
           # DEBUG: Laat zien wat we hebben uitgepakt
           echo "--- DEBUG: Listing extracted files ---"
