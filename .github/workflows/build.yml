@@ -15,25 +15,54 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Gebruik --cask en maak de command-line tool expliciet beschikbaar
+      # STAP 1: Installeer Platypus
       - name: Install Platypus
-        run: |
-          brew install --cask platypus
-          # Maak een symlink zodat 'platypus' als commando werkt
-          sudo ln -sf /Applications/Platypus.app/Contents/Resources/platypus_clt /usr/local/bin/platypus
+        run: brew install --cask platypus
 
-      - name: Convert Icon
-        run: sips -s format png app.ico --out appIcon.png
+      # STAP 2: Fix de ontbrekende Binary en Resources
+      # Platypus command-line tool verwacht bestanden in /usr/local/share,
+      # maar de Cask installeert ze in /Applications. We kopiëren ze handmatig.
+      - name: Setup Platypus Environment
+        run: |
+          # Maak de command-line tool beschikbaar
+          sudo ln -sf /Applications/Platypus.app/Contents/Resources/platypus_clt /usr/local/bin/platypus
+          
+          # Maak de share map aan waar Platypus zoekt
+          sudo mkdir -p /usr/local/share/platypus
+          
+          # Kopieer de cruciale 'ScriptExec' binary (de motor van de app)
+          sudo cp /Applications/Platypus.app/Contents/Resources/ScriptExec /usr/local/share/platypus/ScriptExec
+          
+          # Kopieer de interface bestanden (nodig voor GUI)
+          sudo cp -r /Applications/Platypus.app/Contents/Resources/MainMenu.nib /usr/local/share/platypus/MainMenu.nib
+
+      # STAP 3: Maak een officieel Apple .icns bestand
+      # Platypus faalt vaak op PNGs in CI/CD. We gebruiken 'iconutil' voor een echt icon.
+      - name: Generate Apple Icon (.icns)
+        run: |
+          # Maak een tijdelijke iconset map
+          mkdir MyIcon.iconset
+          
+          # Converteer jouw .ico naar een 512x512 png in die map (vereist voor High Res)
+          sips -z 512 512 app.ico --out MyIcon.iconset/icon_512x512.png
+          sips -z 1024 1024 app.ico --out MyIcon.iconset/icon_512x512@2x.png
+          
+          # 'iconutil' bakt hier een gecomprimeerd .icns bestand van
+          iconutil -c icns MyIcon.iconset
+          
+          # Resultaat is nu: MyIcon.icns
 
       - name: Prepare Script
         run: chmod +x assignment-collector.sh
 
+      # STAP 4: Bouw de App
+      # Let op: We verwijzen nu naar 'MyIcon.icns' ipv de png
       - name: Build Application
         run: |
           platypus \
             -D \
             -o 'None' \
-            -i 'appIcon.png' \
+            -i 'MyIcon.icns' \
             -y \
             -a 'GLR Collector' \
             -I 'nl.glr.assignmentcollector' \
