@@ -15,50 +15,57 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # STAP 1: Installeer Platypus
-      - name: Install Platypus
-        run: brew install --cask platypus
+      # STAP 1: Download Platypus handmatig (Betrouwbaarder dan Brew)
+      - name: Download Platypus
+        run: |
+          echo "Downloading Platypus..."
+          curl -L -O https://sveinbjorn.org/files/software/platypus/Platypus-5.4.1.zip
+          
+          echo "Unzipping..."
+          unzip -q Platypus-5.4.1.zip
+          
+          # DEBUG: Laat zien wat we hebben uitgepakt
+          echo "--- DEBUG: Listing extracted files ---"
+          ls -R Platypus.app/Contents/Resources/ || echo "Folder not found!"
 
-      # STAP 2: Fix de ontbrekende Binary en Resources
-      # Platypus command-line tool verwacht bestanden in /usr/local/share,
-      # maar de Cask installeert ze in /Applications. We kopiëren ze handmatig.
+      # STAP 2: Installeer de command line tools handmatig
+      # We verplaatsen de bestanden precies naar waar de tool ze verwacht
       - name: Setup Platypus Environment
         run: |
-          # Maak de command-line tool beschikbaar
-          sudo ln -sf /Applications/Platypus.app/Contents/Resources/platypus_clt /usr/local/bin/platypus
-          
-          # Maak de share map aan waar Platypus zoekt
+          # Maak de systeemmap aan
           sudo mkdir -p /usr/local/share/platypus
+          sudo mkdir -p /usr/local/bin
           
-          # Kopieer de cruciale 'ScriptExec' binary (de motor van de app)
-          sudo cp /Applications/Platypus.app/Contents/Resources/ScriptExec /usr/local/share/platypus/ScriptExec
+          # Kopieer ScriptExec (De 'motor' van de app)
+          sudo cp "Platypus.app/Contents/Resources/ScriptExec" /usr/local/share/platypus/ScriptExec
           
-          # Kopieer de interface bestanden (nodig voor GUI)
-          sudo cp -r /Applications/Platypus.app/Contents/Resources/MainMenu.nib /usr/local/share/platypus/MainMenu.nib
+          # Kopieer MainMenu.nib (De interface)
+          sudo cp -r "Platypus.app/Contents/Resources/MainMenu.nib" /usr/local/share/platypus/MainMenu.nib
+          
+          # Link de executable naar /usr/local/bin zodat we 'platypus' kunnen typen
+          sudo ln -sf "$(pwd)/Platypus.app/Contents/Resources/platypus_clt" /usr/local/bin/platypus
+          
+          # Maak het uitvoerbaar (voor de zekerheid)
+          sudo chmod +x /usr/local/bin/platypus
+          sudo chmod +x /usr/local/share/platypus/ScriptExec
 
-      # STAP 3: Maak een officieel Apple .icns bestand
-      # Platypus faalt vaak op PNGs in CI/CD. We gebruiken 'iconutil' voor een echt icon.
+      # STAP 3: Icoon fixen
       - name: Generate Apple Icon (.icns)
         run: |
-          # Maak een tijdelijke iconset map
           mkdir MyIcon.iconset
-          
-          # Converteer jouw .ico naar een 512x512 png in die map (vereist voor High Res)
           sips -z 512 512 app.ico --out MyIcon.iconset/icon_512x512.png
           sips -z 1024 1024 app.ico --out MyIcon.iconset/icon_512x512@2x.png
-          
-          # 'iconutil' bakt hier een gecomprimeerd .icns bestand van
           iconutil -c icns MyIcon.iconset
-          
-          # Resultaat is nu: MyIcon.icns
 
       - name: Prepare Script
         run: chmod +x assignment-collector.sh
 
-      # STAP 4: Bouw de App
-      # Let op: We verwijzen nu naar 'MyIcon.icns' ipv de png
+      # STAP 4: Bouwen
       - name: Build Application
         run: |
+          # DEBUG: Check of commando werkt
+          platypus --version || echo "Version check failed"
+          
           platypus \
             -D \
             -o 'None' \
