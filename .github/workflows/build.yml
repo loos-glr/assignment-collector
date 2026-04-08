@@ -21,16 +21,23 @@ jobs:
 
       # STAP 1: Install Platypus (The Official Way)
       - name: Install Platypus
-        uses: sveinbjornt/action-platypus@v1
+        uses: sveinbjornt/setup-platypus@v1
         with:
           version: 'latest'
 
       # STAP 2: Generate Apple Icon (.icns)
-      # We still need this because Platypus expects a .icns file for builds
       - name: Generate Icon
         run: |
           mkdir MyIcon.iconset
-          sips -z 512 512 app.ico --out MyIcon.iconset/icon_512x512.png
+          sips -z 16 16     app.ico --out MyIcon.iconset/icon_16x16.png
+          sips -z 32 32     app.ico --out MyIcon.iconset/icon_16x16@2x.png
+          sips -z 32 32     app.ico --out MyIcon.iconset/icon_32x32.png
+          sips -z 64 64     app.ico --out MyIcon.iconset/icon_32x32@2x.png
+          sips -z 128 128   app.ico --out MyIcon.iconset/icon_128x128.png
+          sips -z 256 256   app.ico --out MyIcon.iconset/icon_128x128@2x.png
+          sips -z 256 256   app.ico --out MyIcon.iconset/icon_256x256.png
+          sips -z 512 512   app.ico --out MyIcon.iconset/icon_256x256@2x.png
+          sips -z 512 512   app.ico --out MyIcon.iconset/icon_512x512.png
           sips -z 1024 1024 app.ico --out MyIcon.iconset/icon_512x512@2x.png
           iconutil -c icns MyIcon.iconset
 
@@ -46,7 +53,6 @@ jobs:
           
           platypus \
             -D \
-            -o 'None' \
             -i 'MyIcon.icns' \
             -y \
             -a 'GLR Collector' \
