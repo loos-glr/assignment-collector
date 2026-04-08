@@ -23,7 +23,7 @@ jobs:
       - name: Install Platypus
         uses: sveinbjornt/setup-platypus@master
         with:
-          version: 'latest'
+          version: '5.5.0'
 
       # STAP 2: Generate Apple Icon (.icns)
       - name: Generate Icon
