@@ -21,7 +21,7 @@ jobs:
 
       # STAP 1: Install Platypus (The Official Way)
       - name: Install Platypus
-        uses: sveinbjornt/setup-platypus@v1
+        uses: sveinbjornt/setup-platypus@master
         with:
           version: 'latest'
 
