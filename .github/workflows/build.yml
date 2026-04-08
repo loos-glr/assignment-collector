@@ -62,16 +62,17 @@ jobs:
             'assignment-collector.sh' \
             'GLR Collector.app'
 
-      # STAP 4: Zip Application (Preserves permissions)
-      - name: Zip Application
-        run: zip -r GLR_Collector.zip "GLR Collector.app"
+      # STAP 4: Create DMG Image (More native for macOS)
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "GLR Collector" -srcfolder "GLR Collector.app" -ov -format UDZO "GLR_Collector.dmg"
 
       # STAP 5: Upload Artifact (For testing)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GLR-Collector-Build
-          path: GLR_Collector.zip
+          name: GLR-Collector-Build-DMG
+          path: GLR_Collector.dmg
           retention-days: 5
 
       # STAP 6: Create Release (Only on tag push)
@@ -79,4 +80,4 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: GLR_Collector.zip
+          files: GLR_Collector.dmg
