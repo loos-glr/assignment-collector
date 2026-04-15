@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # ==============================================================================
-# GLR ASSIGNMENT COLLECTOR - GUI EDITION (v13 - Smart Merge & Overwrite)
+# GLR ASSIGNMENT COLLECTOR - GUI EDITION (v15 - Bulletproof ZIP Extraction)
 # ==============================================================================
 
 cd "$(dirname "$0")"
@@ -101,8 +101,9 @@ ASSIGNMENTS_TO_PROCESS=""
 if [ "$BATCH_MODE" = true ]; then
     ASSIGNMENTS_TO_PROCESS="$ASSIGNMENT_LIST_RAW"
 else
-    IFS=$'\n' read -d '' -r -A ASSIGNMENT_ARRAY <<< "$ASSIGNMENT_LIST_RAW"
+    ASSIGNMENT_ARRAY=("${(@f)ASSIGNMENT_LIST_RAW}")
     CHOICE=$(gui_choose_from_list "Welke opdracht wil je ophalen?" "GLR Collector" "${ASSIGNMENT_ARRAY[@]}")
+    
     if [ "$CHOICE" = "false" ] || [ -z "$CHOICE" ]; then exit 0; fi
     ASSIGNMENTS_TO_PROCESS="$CHOICE"
 fi
@@ -136,7 +137,6 @@ echo "$ASSIGNMENTS_TO_PROCESS" | while read ASSIGNMENT_NAME; do
                 "$ASSIGNMENT_PATH/" "$STUDENT_TARGET/"
 
             # STAP 2: Zoek alle versie mappen, sorteer op versie-nummer (-V), en kopieer ze eroverheen.
-            # Oudere bestanden worden zo automatisch overschreven door de nieuwere bestanden.
             find "$ASSIGNMENT_PATH" -maxdepth 1 -type d \( -name "Version*" -o -name "Versie*" \) | sort -V | while read VERSION_DIR; do
                 [ -z "$VERSION_DIR" ] && continue
                 
@@ -145,8 +145,8 @@ echo "$ASSIGNMENTS_TO_PROCESS" | while read ASSIGNMENT_NAME; do
                     "$VERSION_DIR/" "$STUDENT_TARGET/"
             done
 
-            # STAP 3: Zips uitpakken in deze samengevoegde map (overschrijft zonder te vragen)
-            find "$STUDENT_TARGET" -type f -name "*.zip" | while read ZIPFILE; do
+            # STAP 3: Bulletproof ZIP uitpakken (-iname negeert .ZIP hoofdletters, -print0 snapt spaties)
+            find "$STUDENT_TARGET" -type f -iname "*.zip" -print0 | while IFS= read -r -d '' ZIPFILE; do
                 ZIPDIR="$(dirname "$ZIPFILE")"
                 unzip -q -o "$ZIPFILE" -d "$ZIPDIR" && rm "$ZIPFILE"
             done
@@ -163,11 +163,10 @@ if [ "$BATCH_MODE" = false ]; then
     # Native popup
     BUTTON=$(osascript -e "display dialog \"✅ Klaar! De bestanden staan in Downloads.\" buttons {\"Open Map\", \"OK\"} default button \"OK\" with icon note")
     
-    # Check of ze op "Open Map" klikten (AppleScript output is: button returned:Open Map)
+    # Check of ze op "Open Map" klikten
     if [[ "$BUTTON" == *"Open Map"* ]]; then
         open "$CURRENT_TARGET"
     fi
 else
-    # In batch mode (drag drop) openen we gewoon
     open "$CURRENT_TARGET"
 fi
