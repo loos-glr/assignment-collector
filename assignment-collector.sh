@@ -1,51 +1,38 @@
 #!/bin/zsh
 
 # ==============================================================================
-# GLR ASSIGNMENT COLLECTOR - GUI EDITION (v11)
-# Uses 'osascript' to generate native macOS dialogs
+# GLR ASSIGNMENT COLLECTOR - GUI EDITION (v13 - Smart Merge & Overwrite)
 # ==============================================================================
 
 cd "$(dirname "$0")"
 
 # --- CONFIG ---
 DEFAULT_TARGET_BASE="$HOME/Downloads/GLR_NAKIJKEN"
-ICON_NOTE="📝"
-ICON_ALERT="⚠️"
-ICON_ERROR="❌"
 
-# --- GUI FUNCTIES (APPLE SCRIPT WRAPPERS) ---
+# --- GUI FUNCTIES ---
 
-# 1. Toon een Finder kies-venster voor mappen
 gui_choose_folder() {
     local prompt="$1"
-    # We vragen System Events om de focus te pakken, anders opent het venster achter de huidige app
-    osascript -e "tell application \"System Events\" to activate" \
-              -e "tell application \"System Events\" to return POSIX path of (choose folder with prompt \"$prompt\")" 2>/dev/null
+    osascript -e "return POSIX path of (choose folder with prompt \"$prompt\")" 2>/dev/null
 }
 
-# 2. Toon een lijst waaruit gekozen moet worden
 gui_choose_from_list() {
     local prompt="$1"
     local title="$2"
     shift 2
     local options=("$@")
     
-    # Zsh array omzetten naar AppleScript string: {"Optie 1", "Optie 2"}
-    # We escapen dubbele quotes in de opties voor de zekerheid
     local applescript_list="{"
     for opt in "${options[@]}"; do
-        # Escape quotes inside option
         clean_opt="${opt//\"/\\\"}"
         applescript_list="$applescript_list\"$clean_opt\","
     done
-    # Verwijder laatste komma en sluit af
     applescript_list="${applescript_list%,}}"
     
     osascript -e "tell application \"System Events\" to activate" \
               -e "choose from list $applescript_list with title \"$title\" with prompt \"$prompt\"" 2>/dev/null
 }
 
-# 3. Simpele alert / notificatie
 gui_alert() {
     local msg="$1"
     osascript -e "display dialog \"$msg\" buttons {\"OK\"} default button \"OK\" with icon note" >/dev/null
@@ -57,7 +44,6 @@ gui_notification() {
     osascript -e "display notification \"$msg\" with title \"$title\""
 }
 
-# --- HULPFUNCTIE: PAD SCHOONMAKEN ---
 clean_path() {
     local input_path="$1"
     input_path="${input_path/#\~/$HOME}" 
@@ -73,30 +59,18 @@ clean_path() {
 # START LOGICA
 # ==============================================================================
 
-# CHECK 1: Drag & Drop (Argument Modus)
 if [ -n "$1" ]; then
-    # BATCH MODUS (Geen GUI vragen, gewoon gaan)
     CURRENT_SOURCE=$(clean_path "$1")
     CURRENT_TARGET="$DEFAULT_TARGET_BASE"
     BATCH_MODE=true
 else
-    # GUI MODUS
     BATCH_MODE=false
-    
-    # Stap A: Vraag Bronmap
     CURRENT_SOURCE=$(gui_choose_folder "Selecteer de map 'Submitted files' van de klas:")
     
-    if [ -z "$CURRENT_SOURCE" ]; then
-        # Gebruiker drukte op Annuleren
-        exit 0
-    fi
-    
-    # Stap B: Vraag Doelmap (Optioneel, we kunnen ook default pakken om clicks te besparen)
-    # Laten we voor idiot-proof de default pakken, maar wel melden.
+    if [ -z "$CURRENT_SOURCE" ]; then exit 0; fi
     CURRENT_TARGET="$DEFAULT_TARGET_BASE"
 fi
 
-# Validatie
 if [ ! -d "$CURRENT_SOURCE" ]; then
     gui_alert "❌ Fout: De gekozen map bestaat niet of is onleesbaar."
     exit 1
@@ -106,7 +80,6 @@ fi
 # SCANNEN
 # ==============================================================================
 
-# Scan opdrachten (find command blijft hetzelfde)
 ASSIGNMENT_LIST_RAW=$(find "$CURRENT_SOURCE" -mindepth 2 -maxdepth 2 -type d \
     -not -name "Version*" \
     -not -name "Versie*" \
@@ -120,34 +93,24 @@ if [ -z "$ASSIGNMENT_LIST_RAW" ]; then
 fi
 
 # ==============================================================================
-# SELECTIE & VERWERKING
+# SELECTIE
 # ==============================================================================
 
 ASSIGNMENTS_TO_PROCESS=""
 
 if [ "$BATCH_MODE" = true ]; then
-    # Batch: Alles verwerken
     ASSIGNMENTS_TO_PROCESS="$ASSIGNMENT_LIST_RAW"
 else
-    # GUI: Laat lijst zien
-    # We moeten de newline-separated string omzetten naar een array voor onze functie
     IFS=$'\n' read -d '' -r -A ASSIGNMENT_ARRAY <<< "$ASSIGNMENT_LIST_RAW"
-    
     CHOICE=$(gui_choose_from_list "Welke opdracht wil je ophalen?" "GLR Collector" "${ASSIGNMENT_ARRAY[@]}")
-    
-    if [ "$CHOICE" = "false" ] || [ -z "$CHOICE" ]; then
-        exit 0 # Annuleren
-    fi
-    
+    if [ "$CHOICE" = "false" ] || [ -z "$CHOICE" ]; then exit 0; fi
     ASSIGNMENTS_TO_PROCESS="$CHOICE"
 fi
 
 # ==============================================================================
-# DE LOOP (Kopiëren)
+# VERWERKING (Kopiëren, Samenvoegen & Uitpakken)
 # ==============================================================================
 
-# Feedback tijdens processen is lastig met AppleScript dialogs (die blokkeren).
-# We sturen een notificatie dat we begonnen zijn.
 if [ "$BATCH_MODE" = false ]; then
     gui_notification "Bestanden worden verzameld..." "GLR Collector"
 fi
@@ -166,18 +129,28 @@ echo "$ASSIGNMENTS_TO_PROCESS" | while read ASSIGNMENT_NAME; do
             STUDENT_TARGET="$DESTINATION/$STUDENT_NAME"
             mkdir -p "$STUDENT_TARGET"
 
-            # Versie logic
-            LATEST_VERSION_DIR=$(find "$ASSIGNMENT_PATH" -maxdepth 1 -type d \( -name "Version*" -o -name "Versie*" \) | sort -V | tail -n 1)
-            if [ -n "$LATEST_VERSION_DIR" ]; then SRC_PATH="$LATEST_VERSION_DIR/"; else SRC_PATH="$ASSIGNMENT_PATH/"; fi
-
+            # STAP 1: Kopieer de basisbestanden (maar negeer Version/Versie mappen nog even)
             rsync -a \
                 --exclude 'node_modules' --exclude '.git' --exclude '.DS_Store' --exclude '__MACOSX' \
-                "$SRC_PATH" "$STUDENT_TARGET/"
+                --exclude 'Version*' --exclude 'Versie*' \
+                "$ASSIGNMENT_PATH/" "$STUDENT_TARGET/"
 
-            ZIPFILE=$(find "$STUDENT_TARGET" -maxdepth 1 -name "*.zip" | head -n 1)
-            if [ -n "$ZIPFILE" ]; then
-                unzip -q -o "$ZIPFILE" -d "$STUDENT_TARGET" && rm "$ZIPFILE"
-            fi
+            # STAP 2: Zoek alle versie mappen, sorteer op versie-nummer (-V), en kopieer ze eroverheen.
+            # Oudere bestanden worden zo automatisch overschreven door de nieuwere bestanden.
+            find "$ASSIGNMENT_PATH" -maxdepth 1 -type d \( -name "Version*" -o -name "Versie*" \) | sort -V | while read VERSION_DIR; do
+                [ -z "$VERSION_DIR" ] && continue
+                
+                rsync -a \
+                    --exclude 'node_modules' --exclude '.git' --exclude '.DS_Store' --exclude '__MACOSX' \
+                    "$VERSION_DIR/" "$STUDENT_TARGET/"
+            done
+
+            # STAP 3: Zips uitpakken in deze samengevoegde map (overschrijft zonder te vragen)
+            find "$STUDENT_TARGET" -type f -name "*.zip" | while read ZIPFILE; do
+                ZIPDIR="$(dirname "$ZIPFILE")"
+                unzip -q -o "$ZIPFILE" -d "$ZIPDIR" && rm "$ZIPFILE"
+            done
+            
         fi
     done
 done
