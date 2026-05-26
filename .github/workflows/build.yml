@@ -46,7 +46,7 @@ jobs:
       # STAP 3: Build Application
       # We use the flags we defined earlier:
       # -D : Droppable (Crucial for drag & drop support)
-      # -o 'None' : No text window (Since we use native GUI dialogs)
+      # -o 'Progress Bar' : Shows progress bar
       # -i : Icon path
       # -I : Bundle ID
       - name: Build App
@@ -55,6 +55,7 @@ jobs:
           
           platypus \
             -D \
+            -o 'Progress Bar' \
             -i 'MyIcon.icns' \
             -y \
             -a 'GLR Collector' \
