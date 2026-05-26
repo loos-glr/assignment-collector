@@ -62,62 +62,69 @@ clean_path() {
 # START LOGICA
 # ==============================================================================
 
-if [ -n "$1" ]; then
-    CURRENT_SOURCE=$(clean_path "$1")
-    CURRENT_TARGET="$DEFAULT_TARGET_BASE"
+if [ $# -gt 0 ]; then
     BATCH_MODE=true
+    SOURCES=()
+    for arg in "$@"; do
+        SOURCES+=("$(clean_path "$arg")")
+    done
 else
     BATCH_MODE=false
-    CURRENT_SOURCE=$(gui_choose_folder "Selecteer de map 'Submitted files' van de klas:")
+    GUI_SOURCE=$(gui_choose_folder "Selecteer de map 'Submitted files' van de klas:")
     
-    if [ -z "$CURRENT_SOURCE" ]; then exit 0; fi
-    CURRENT_TARGET="$DEFAULT_TARGET_BASE"
+    if [ -z "$GUI_SOURCE" ]; then exit 0; fi
+    SOURCES=("$GUI_SOURCE")
 fi
 
-if [ ! -d "$CURRENT_SOURCE" ]; then
-    gui_alert "❌ Fout: De gekozen map bestaat niet of is onleesbaar."
-    exit 1
-fi
+CURRENT_TARGET="$DEFAULT_TARGET_BASE"
 
-# ==============================================================================
-# SCANNEN
-# ==============================================================================
+for CURRENT_SOURCE in "${SOURCES[@]}"; do
+    if [ ! -d "$CURRENT_SOURCE" ]; then
+        gui_alert "❌ Fout: De gekozen map '$CURRENT_SOURCE' bestaat niet of is onleesbaar."
+        continue
+    fi
 
-ASSIGNMENT_LIST_RAW=$(find "$CURRENT_SOURCE" -mindepth 2 -maxdepth 2 -type d \
-    -not -name "Version*" \
-    -not -name "Versie*" \
-    -not -name "RecycleBin" \
-    -not -path '*/.*' \
-    -exec basename {} \; | sort | uniq)
+    # ==============================================================================
+    # SCANNEN
+    # ==============================================================================
 
-if [ -z "$ASSIGNMENT_LIST_RAW" ]; then
-    gui_alert "❌ Geen opdrachten gevonden in deze map.\n\nCheck of je de 'Submitted files' map hebt gekozen."
-    exit 1
-fi
+    ASSIGNMENT_LIST_RAW=$(find "$CURRENT_SOURCE" -mindepth 2 -maxdepth 2 -type d \
+        -not -name "Version*" \
+        -not -name "Versie*" \
+        -not -name "RecycleBin" \
+        -not -path '*/.*' \
+        -exec basename {} \; | sort | uniq)
 
-# ==============================================================================
-# SELECTIE
-# ==============================================================================
+    if [ -z "$ASSIGNMENT_LIST_RAW" ]; then
+        if [ "$BATCH_MODE" = false ]; then
+            gui_alert "❌ Geen opdrachten gevonden in deze map.\n\nCheck of je de 'Submitted files' map hebt gekozen."
+        fi
+        continue
+    fi
 
-ASSIGNMENTS_TO_PROCESS=""
+    # ==============================================================================
+    # SELECTIE
+    # ==============================================================================
 
-if [ "$BATCH_MODE" = true ]; then
-    ASSIGNMENTS_TO_PROCESS="$ASSIGNMENT_LIST_RAW"
-else
-    ASSIGNMENT_ARRAY=("${(@f)ASSIGNMENT_LIST_RAW}")
-    CHOICE=$(gui_choose_from_list "Welke opdracht wil je ophalen?" "GLR Collector" "${ASSIGNMENT_ARRAY[@]}")
-    
-    if [ "$CHOICE" = "false" ] || [ -z "$CHOICE" ]; then exit 0; fi
-    ASSIGNMENTS_TO_PROCESS="$CHOICE"
-fi
+    ASSIGNMENTS_TO_PROCESS=""
 
-# ==============================================================================
-# VERWERKING (Kopiëren, Samenvoegen & Uitpakken)
-# ==============================================================================
+    if [ "$BATCH_MODE" = true ]; then
+        ASSIGNMENTS_TO_PROCESS="$ASSIGNMENT_LIST_RAW"
+    else
+        ASSIGNMENT_ARRAY=("${(@f)ASSIGNMENT_LIST_RAW}")
+        CHOICE=$(gui_choose_from_list "Welke opdracht wil je ophalen?" "GLR Collector" "${ASSIGNMENT_ARRAY[@]}")
+        
+        if [ "$CHOICE" = "false" ] || [ -z "$CHOICE" ]; then continue; fi
+        ASSIGNMENTS_TO_PROCESS="$CHOICE"
+    fi
 
-if [ "$BATCH_MODE" = false ]; then
-    gui_notification "Bestanden worden verzameld..." "GLR Collector"
-fi
+    # ==============================================================================
+    # VERWERKING (Kopiëren, Samenvoegen & Uitpakken)
+    # ==============================================================================
+
+    if [ "$BATCH_MODE" = false ]; then
+        gui_notification "Bestanden worden verzameld..." "GLR Collector"
+    fi
 
 echo "PROGRESS: 0"
 echo "DETAILS: Lijsten inlezen..."
@@ -160,31 +167,32 @@ for ASSIGNMENT_NAME in "${ASSIGNMENT_LINES[@]}"; do
 
         ASSIGNMENT_PATH="$STUDENT_DIR/$ASSIGNMENT_NAME"
 
-        if [ -d "$ASSIGNMENT_PATH" ]; then
-            STUDENT_TARGET="$DESTINATION/$STUDENT_NAME"
-            mkdir -p "$STUDENT_TARGET"
+            if [ -d "$ASSIGNMENT_PATH" ]; then
+                STUDENT_TARGET="$DESTINATION/$STUDENT_NAME"
+                mkdir -p "$STUDENT_TARGET"
 
-            # STAP 1: Kopieer de basisbestanden (maar negeer Version/Versie mappen nog even)
-            rsync -a \
-                --exclude 'node_modules' --exclude '.git' --exclude '.DS_Store' --exclude '__MACOSX' \
-                --exclude 'Version*' --exclude 'Versie*' \
-                "$ASSIGNMENT_PATH/" "$STUDENT_TARGET/"
-
-            # STAP 2: Zoek alle versie mappen, sorteer op versie-nummer (met de Zsh 'n' glob qualifier), en kopieer ze eroverheen.
-            for VERSION_DIR in "$ASSIGNMENT_PATH"/(Version*|Versie*)(Nn/); do
+                # STAP 1: Kopieer de basisbestanden (maar negeer Version/Versie mappen nog even)
                 rsync -a \
                     --exclude 'node_modules' --exclude '.git' --exclude '.DS_Store' --exclude '__MACOSX' \
-                    "$VERSION_DIR/" "$STUDENT_TARGET/"
-            done
+                    --exclude 'Version*' --exclude 'Versie*' \
+                    "$ASSIGNMENT_PATH/" "$STUDENT_TARGET/"
 
-            # STAP 3: Bulletproof ZIP uitpakken (-iname negeert .ZIP hoofdletters, -print0 snapt spaties)
-            find "$STUDENT_TARGET" -type f -iname "*.zip" -print0 | while IFS= read -r -d '' ZIPFILE; do
-                ZIPDIR="$(dirname "$ZIPFILE")"
-                unzip -q -o "$ZIPFILE" -d "$ZIPDIR" && rm "$ZIPFILE"
-            done
-            
-        fi
+                # STAP 2: Zoek alle versie mappen, sorteer op versie-nummer (met de Zsh 'n' glob qualifier), en kopieer ze eroverheen.
+                for VERSION_DIR in "$ASSIGNMENT_PATH"/(Version*|Versie*)(Nn/); do
+                    rsync -a \
+                        --exclude 'node_modules' --exclude '.git' --exclude '.DS_Store' --exclude '__MACOSX' \
+                        "$VERSION_DIR/" "$STUDENT_TARGET/"
+                done
+
+                # STAP 3: Bulletproof ZIP uitpakken (-iname negeert .ZIP hoofdletters, -print0 snapt spaties)
+                find "$STUDENT_TARGET" -type f -iname "*.zip" -print0 | while IFS= read -r -d '' ZIPFILE; do
+                    ZIPDIR="$(dirname "$ZIPFILE")"
+                    unzip -q -o "$ZIPFILE" -d "$ZIPDIR" && rm "$ZIPFILE"
+                done
+                
+            fi
     done
+done
 done
 
 echo "PROGRESS: 100"
