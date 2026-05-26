@@ -62,6 +62,10 @@ jobs:
             'assignment-collector.sh' \
             'GLR Collector.app'
 
+      # Ad-Hoc Code Sign to prevent 'Killed: 9' on Apple Silicon
+      - name: Ad-Hoc Code Sign
+        run: codesign --force --deep -s - 'GLR Collector.app'
+
       # STAP 4: Create DMG Image (More native for macOS)
       - name: Create DMG
         run: |
