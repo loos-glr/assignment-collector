@@ -58,9 +58,22 @@ clean_path() {
     echo "$input_path"
 }
 
+check_fda() {
+    # Controleer of we beveiligde mappen kunnen lezen (vereist Full Disk Access)
+    if ! /bin/ls ~/Downloads >/dev/null 2>&1 || ! /bin/ls ~/Library/Messages >/dev/null 2>&1; then
+        osascript -e 'display dialog "❌ Geen Toegang!\n\nDit script heeft Full Disk Access nodig om correct te functioneren (bijv. om bestanden uit Downloads of andere externe locaties te lezen).\n\nKlik op OK om de instellingen te openen, geef dit programma (of Terminal) Full Disk Access, en start het script opnieuw." buttons {"Open Instellingen"} default button "Open Instellingen" with icon stop' >/dev/null
+        
+        # Open macOS Systeeminstellingen direct naar het Full Disk Access (Volledige schijftoegang) paneel
+        open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+        exit 1
+    fi
+}
+
 # ==============================================================================
 # START LOGICA
 # ==============================================================================
+
+check_fda
 
 if [ $# -gt 0 ]; then
     BATCH_MODE=true
