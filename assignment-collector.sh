@@ -2,6 +2,13 @@
 
 # ==============================================================================
 # GLR ASSIGNMENT COLLECTOR - GUI EDITION (v15 - Bulletproof ZIP Extraction)
+# --- LOGGING ---
+LOG_FILE="$HOME/Library/Logs/GLR_Collector.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "=============================================================================="
+echo "GLR ASSIGNMENT COLLECTOR STARTED AT $(date)"
+echo "=============================================================================="
+
 # ==============================================================================
 
 cd "$(dirname "$0")"
