@@ -119,14 +119,45 @@ if [ "$BATCH_MODE" = false ]; then
     gui_notification "Bestanden worden verzameld..." "GLR Collector"
 fi
 
-echo "$ASSIGNMENTS_TO_PROCESS" | while read ASSIGNMENT_NAME; do
+echo "PROGRESS: 0"
+echo "DETAILS: Lijsten inlezen..."
+
+ASSIGNMENT_LINES=("${(@f)ASSIGNMENTS_TO_PROCESS}")
+TOTAL_ASSIGNMENTS=0
+for a in "${ASSIGNMENT_LINES[@]}"; do
+    [ -n "$a" ] && ((TOTAL_ASSIGNMENTS++))
+done
+
+FIND_OUTPUT=$(find "$CURRENT_SOURCE" -maxdepth 1 -mindepth 1 -type d)
+STUDENT_LINES=("${(@f)FIND_OUTPUT}")
+TOTAL_STUDENTS=0
+for s in "${STUDENT_LINES[@]}"; do
+    [ -n "$s" ] && ((TOTAL_STUDENTS++))
+done
+
+TOTAL_STEPS=$(( TOTAL_ASSIGNMENTS * TOTAL_STUDENTS ))
+if [ "$TOTAL_STEPS" -eq 0 ]; then
+    TOTAL_STEPS=1
+fi
+
+CURRENT_STEP=0
+
+for ASSIGNMENT_NAME in "${ASSIGNMENT_LINES[@]}"; do
     [ -z "$ASSIGNMENT_NAME" ] && continue
 
     DESTINATION="$CURRENT_TARGET/$ASSIGNMENT_NAME"
     mkdir -p "$DESTINATION"
     
-    find "$CURRENT_SOURCE" -maxdepth 1 -mindepth 1 -type d | while read STUDENT_DIR; do
+    for STUDENT_DIR in "${STUDENT_LINES[@]}"; do
+        [ -z "$STUDENT_DIR" ] && continue
+
         STUDENT_NAME=$(basename "$STUDENT_DIR")
+        
+        ((CURRENT_STEP++))
+        PCT=$(( 100 * CURRENT_STEP / TOTAL_STEPS ))
+        echo "PROGRESS: $PCT"
+        echo "DETAILS: $ASSIGNMENT_NAME ($STUDENT_NAME)"
+
         ASSIGNMENT_PATH="$STUDENT_DIR/$ASSIGNMENT_NAME"
 
         if [ -d "$ASSIGNMENT_PATH" ]; then
@@ -155,6 +186,9 @@ echo "$ASSIGNMENTS_TO_PROCESS" | while read ASSIGNMENT_NAME; do
         fi
     done
 done
+
+echo "PROGRESS: 100"
+echo "DETAILS: Klaar!"
 
 # ==============================================================================
 # KLAAR
