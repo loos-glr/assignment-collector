@@ -20,7 +20,7 @@ DEFAULT_TARGET_BASE="$HOME/Downloads/GLR_NAKIJKEN"
 
 gui_choose_folder() {
     local prompt="$1"
-    osascript -e "return POSIX path of (choose folder with prompt \"$prompt\")" 2>/dev/null
+    osascript -e "on run argv" -e "return POSIX path of (choose folder with prompt (item 1 of argv))" -e "end run" "$prompt" 2>/dev/null
 }
 
 gui_choose_from_list() {
@@ -29,26 +29,22 @@ gui_choose_from_list() {
     shift 2
     local options=("$@")
     
-    local applescript_list="{"
-    for opt in "${options[@]}"; do
-        clean_opt="${opt//\"/\\\"}"
-        applescript_list="$applescript_list\"$clean_opt\","
-    done
-    applescript_list="${applescript_list%,}}"
-    
-    osascript -e "tell application \"System Events\" to activate" \
-              -e "choose from list $applescript_list with title \"$title\" with prompt \"$prompt\"" 2>/dev/null
+    osascript -e "on run argv" \
+              -e "tell application \"System Events\" to activate" \
+              -e "choose from list (items 3 thru -1 of argv) with title (item 2 of argv) with prompt (item 1 of argv)" \
+              -e "end run" \
+              "$prompt" "$title" "${options[@]}" 2>/dev/null
 }
 
 gui_alert() {
-    local msg="$1"
-    osascript -e "display dialog \"$msg\" buttons {\"OK\"} default button \"OK\" with icon note" >/dev/null
+    local msg="$(printf "%b" "$1")"
+    osascript -e "on run argv" -e "display dialog (item 1 of argv) buttons {\"OK\"} default button \"OK\" with icon note" -e "end run" "$msg" >/dev/null
 }
 
 gui_notification() {
     local msg="$1"
     local title="$2"
-    osascript -e "display notification \"$msg\" with title \"$title\""
+    osascript -e "on run argv" -e "display notification (item 1 of argv) with title (item 2 of argv)" -e "end run" "$msg" "$title" 2>/dev/null
 }
 
 clean_path() {
@@ -166,7 +162,7 @@ done
 
 if [ "$BATCH_MODE" = false ]; then
     # Native popup
-    BUTTON=$(osascript -e "display dialog \"✅ Klaar! De bestanden staan in Downloads.\" buttons {\"Open Map\", \"OK\"} default button \"OK\" with icon note")
+    BUTTON=$(osascript -e "on run argv" -e "display dialog (item 1 of argv) buttons {\"Open Map\", \"OK\"} default button \"OK\" with icon note" -e "end run" "✅ Klaar! De bestanden staan in Downloads.")
     
     # Check of ze op "Open Map" klikten
     if [[ "$BUTTON" == *"Open Map"* ]]; then
