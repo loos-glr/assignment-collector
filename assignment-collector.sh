@@ -143,10 +143,8 @@ echo "$ASSIGNMENTS_TO_PROCESS" | while read ASSIGNMENT_NAME; do
                 --exclude 'Version*' --exclude 'Versie*' \
                 "$ASSIGNMENT_PATH/" "$STUDENT_TARGET/"
 
-            # STAP 2: Zoek alle versie mappen, sorteer op versie-nummer (-V), en kopieer ze eroverheen.
-            find "$ASSIGNMENT_PATH" -maxdepth 1 -type d \( -name "Version*" -o -name "Versie*" \) | sort -V | while read VERSION_DIR; do
-                [ -z "$VERSION_DIR" ] && continue
-                
+            # STAP 2: Zoek alle versie mappen, sorteer op versie-nummer (met de Zsh 'n' glob qualifier), en kopieer ze eroverheen.
+            for VERSION_DIR in "$ASSIGNMENT_PATH"/(Version*|Versie*)(Nn/); do
                 rsync -a \
                     --exclude 'node_modules' --exclude '.git' --exclude '.DS_Store' --exclude '__MACOSX' \
                     "$VERSION_DIR/" "$STUDENT_TARGET/"
